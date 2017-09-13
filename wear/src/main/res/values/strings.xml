@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">RunTrack</string>
+    <string name="hello_world">Hello World!</string>
+    <string name="location_updated">Location Updated: %1$s</string>
+</resources>
