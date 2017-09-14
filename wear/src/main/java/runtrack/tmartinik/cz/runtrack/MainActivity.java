@@ -6,37 +6,43 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
-import android.content.pm.PackageManager;
 import android.location.Location;
-import android.net.Uri;
 import android.os.Bundle;
 import android.os.IBinder;
-import android.provider.Settings;
-import android.support.annotation.NonNull;
-import android.support.v4.app.ActivityCompat;
-import android.support.wearable.activity.WearableActivity;
+import android.os.ParcelUuid;
 import android.support.wear.widget.BoxInsetLayout;
+import android.support.wearable.activity.WearableActivity;
+import android.text.TextUtils;
 import android.util.Log;
 import android.view.View;
 import android.widget.TextView;
 
+import com.polidea.rxandroidble.RxBleClient;
+import com.polidea.rxandroidble.RxBleDevice;
+import com.polidea.rxandroidble.scan.ScanFilter;
+import com.polidea.rxandroidble.scan.ScanResult;
+import com.polidea.rxandroidble.scan.ScanSettings;
+import com.tbruyelle.rxpermissions.RxPermissions;
+
 import java.text.SimpleDateFormat;
+import java.util.Collections;
 import java.util.Date;
 import java.util.Locale;
+
+import rx.Subscription;
+import rx.functions.Action1;
 
 public class MainActivity extends WearableActivity {
 
     private static final SimpleDateFormat AMBIENT_DATE_FORMAT =
             new SimpleDateFormat("HH:mm:ss", Locale.US);
-    private static final String TAG = "WATCH";
-    private static final int REQUEST_PERMISSIONS_REQUEST_LOCATION = 1;
-    private static final int REQUEST_PERMISSIONS_REQUEST_SENSORS = 2;
 
     private BoxInsetLayout mContainerView;
     private TextView mTextView;
     private TextView mClockView;
     private TextView mDistanceView;
     private TextView mHrView;
+    private boolean mUpdating = false;
 
 
     // A reference to the service used to get location updates.
@@ -54,6 +60,13 @@ public class MainActivity extends WearableActivity {
             LocationUpdatesService.LocalBinder binder = (LocationUpdatesService.LocalBinder) service;
             mService = binder.getService();
             mBound = true;
+            mUpdating = mService.isUpdating();
+            if (mUpdating) {
+                //TODO:
+            } else {
+                mService.requestLocationUpdates();
+                //TODO:
+            }
         }
 
         @Override
@@ -62,6 +75,7 @@ public class MainActivity extends WearableActivity {
             mBound = false;
         }
     };
+    private Subscription mScanSubscription;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -77,79 +91,61 @@ public class MainActivity extends WearableActivity {
 
         myReceiver = new MyReceiver();
 
-        // Check that the user hasn't revoked permissions by going to Settings.
-        if (!checkPermissions(Manifest.permission.ACCESS_FINE_LOCATION) || !checkPermissions(Manifest.permission.BODY_SENSORS)) {
-            requestPermissions(REQUEST_PERMISSIONS_REQUEST_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION,  Manifest.permission.BODY_SENSORS);
-        }
+        RxPermissions rxPermissions = new RxPermissions(MainActivity.this);
+        rxPermissions
+                .request(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.BODY_SENSORS, Manifest.permission.BLUETOOTH)
+                .subscribe(new Action1<Boolean>() {
+                    @Override
+                    public void call(Boolean granted) {
+                        if (granted) {
+                            // Bind to the service. If the service is in foreground mode, this signals to the service
+                            // that since this activity is in the foreground, the service can exit foreground mode.
+//                            bindService(new Intent(MainActivity.this, LocationUpdatesService.class), mServiceConnection,
+//                                    Context.BIND_AUTO_CREATE);
+                            scanDevices();
 
-        // Bind to the service. If the service is in foreground mode, this signals to the service
-        // that since this activity is in the foreground, the service can exit foreground mode.
-        bindService(new Intent(this, LocationUpdatesService.class), mServiceConnection,
-                Context.BIND_AUTO_CREATE);
+// When done, just unsubscribe.
+
+                        } else {
+                            mClockView.setText("Permissions missing");
+                        }
+                    }
+                });
     }
 
-    private boolean checkPermissions(String permission) {
-        return PackageManager.PERMISSION_GRANTED == ActivityCompat.checkSelfPermission(this,
-                permission);
-    }
-
-    private void requestPermissions(int code, String... permissions) {
-        boolean shouldProvideRationale =
-                ActivityCompat.shouldShowRequestPermissionRationale(this,
-                        Manifest.permission.ACCESS_FINE_LOCATION);
-
-        // Provide an additional rationale to the user. This would happen if the user denied the
-        // request previously, but didn't check the "Don't ask again" checkbox.
-        if (shouldProvideRationale) {
-            Log.i(TAG, "Displaying permission rationale to provide additional context.");
-
-            ActivityCompat.requestPermissions(MainActivity.this,
-                    permissions,
-                    code);
-        } else {
-            Log.i(TAG, "Requesting permission");
-            // Request permission. It's possible this can be auto answered if device policy
-            // sets the permission in a given state or the user denied the permission
-            // previously and checked "Never ask again".
-            ActivityCompat.requestPermissions(MainActivity.this,
-                    permissions,
-                    code);
-        }
+    private void scanDevices() {
+        RxBleClient rxBleClient = RxBleClient.create(MainActivity.this);
+        // change if needed
+// change if needed
+// add filters if needed
+        mScanSubscription = rxBleClient.scanBleDevices(
+                new ScanSettings.Builder()
+                        .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY) // change if needed
+                        .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES) // change if needed
+                        .build()
+//                , new ScanFilter[]{new ScanFilter.Builder().setServiceUuid(ParcelUuid.fromString("00002a37-0000-1000-8000-00805f9b34fb")).build()}
+                // add filters if needed
+        )
+                .subscribe(new Action1<ScanResult>() {
+                    public void call(ScanResult result) {
+                        RxBleDevice device = result.getBleDevice();
+                        Log.d("BLE",device.getMacAddress() +"; " +device.getName()+"; " +device.getConnectionState() +"; " + device.getBluetoothDevice().getType() +);
+                        mTextView.setText("Found devices");
+                    }
+                });
     }
 
     @Override
     protected void onPause() {
         super.onPause();
+        mScanSubscription.unsubscribe();
     }
 
-    /**
-     * Callback received when a permissions request has been completed.
-     */
     @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
-                                           @NonNull int[] grantResults) {
-        Log.i(TAG, "onRequestPermissionResult");
-        if (requestCode == REQUEST_PERMISSIONS_REQUEST_LOCATION) {
-            if (grantResults.length <= 0) {
-                // If user interaction was interrupted, the permission request is cancelled and you
-                // receive empty arrays.
-                Log.i(TAG, "User interaction was cancelled.");
-            } else if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                // Permission was granted.
-                mService.requestLocationUpdates();
-            } else {
-                // Permission denied.
-                // Build intent that displays the App settings screen.
-                Intent intent = new Intent();
-                intent.setAction(
-                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
-                Uri uri = Uri.fromParts("package",
-                        BuildConfig.APPLICATION_ID, null);
-                intent.setData(uri);
-                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                startActivity(intent);
-            }
-        }
+    protected void onDestroy() {
+        super.onDestroy();
+//        mService.removeLocationUpdates();
+//        unbindService(mServiceConnection);
     }
 
     @Override
@@ -171,21 +167,19 @@ public class MainActivity extends WearableActivity {
     }
 
     private void updateDisplay() {
-        if (isAmbient()) {
-            mContainerView.setBackgroundColor(getResources().getColor(android.R.color.black));
-            mTextView.setTextColor(getResources().getColor(android.R.color.white));
-            mClockView.setVisibility(View.VISIBLE);
+        if (mUpdating) {
+            if (isAmbient()) {
+                mContainerView.setBackgroundColor(getResources().getColor(android.R.color.black));
+                mTextView.setTextColor(getResources().getColor(android.R.color.white));
+                mClockView.setVisibility(View.VISIBLE);
 
-            mClockView.setText(AMBIENT_DATE_FORMAT.format(new Date()));
-        } else {
-            mContainerView.setBackground(null);
-            mTextView.setTextColor(getResources().getColor(android.R.color.black));
-            mClockView.setVisibility(View.GONE);
+                mClockView.setText(AMBIENT_DATE_FORMAT.format(new Date()));
+            } else {
+                mContainerView.setBackground(null);
+                mTextView.setTextColor(getResources().getColor(android.R.color.black));
+                mClockView.setVisibility(View.GONE);
+            }
         }
-    }
-
-    private boolean hasGps() {
-        return getPackageManager().hasSystemFeature(PackageManager.FEATURE_LOCATION_GPS);
     }
 
     /**

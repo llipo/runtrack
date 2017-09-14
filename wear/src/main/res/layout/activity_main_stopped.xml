@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<android.support.wear.widget.BoxInsetLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/container"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context="runtrack.tmartinik.cz.runtrack.MainActivity"
+    tools:deviceIds="wear">
+
+    <ImageButton
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:padding="5dp"
+        android:id="@+id/ib_start"
+        android:src="@drawable/ic_play"
+        app:boxedEdges="all">
+    </ImageButton>
+
+
+</android.support.wear.widget.BoxInsetLayout>

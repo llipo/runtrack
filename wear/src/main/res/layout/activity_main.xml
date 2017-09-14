@@ -8,18 +8,25 @@
     tools:context="runtrack.tmartinik.cz.runtrack.MainActivity"
     tools:deviceIds="wear">
 
-    <TextView
-        android:id="@+id/text"
+    <RelativeLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:padding="5dp"
+        app:boxedEdges="all">
+
+    <TextView
+        android:id="@+id/text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:gravity="top|center"
         android:text="@string/hello_world"
-        app:layout_box="all" />
+        app:layout_box="left" />
 
     <TextView
         android:id="@+id/distance"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:layout_gravity="center"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:gravity="center"
         android:text="6.3Km"
         app:layout_box="all" />
 
@@ -27,18 +34,21 @@
         android:id="@+id/clock"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="bottom|center"
-        android:textColor="@android:color/white"
+        android:layout_gravity="center"
+        android:text="00:05:36"
+        android:textSize="30dp"
+        android:textColor="@android:color/black"
         app:layout_box="all" />
 
     <TextView
         android:id="@+id/hr"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_height="wrap_content"
         android:text="180 Bmp"
-        android:layout_gravity="bottom|center"
+        android:layout_alignParentBottom="true"
+        android:gravity="center_horizontal"
         app:layout_box="all" />
-
+    </RelativeLayout>
 
 
 </android.support.wear.widget.BoxInsetLayout>
