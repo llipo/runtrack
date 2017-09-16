@@ -1,6 +1,8 @@
 package runtrack.tmartinik.cz.runtrack;
 
 import android.Manifest;
+import android.bluetooth.BluetoothGattCharacteristic;
+import android.bluetooth.BluetoothGattDescriptor;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
@@ -18,7 +20,10 @@ import android.view.View;
 import android.widget.TextView;
 
 import com.polidea.rxandroidble.RxBleClient;
+import com.polidea.rxandroidble.RxBleConnection;
 import com.polidea.rxandroidble.RxBleDevice;
+import com.polidea.rxandroidble.RxBleDeviceServices;
+import com.polidea.rxandroidble.helpers.ValueInterpreter;
 import com.polidea.rxandroidble.scan.ScanFilter;
 import com.polidea.rxandroidble.scan.ScanResult;
 import com.polidea.rxandroidble.scan.ScanSettings;
@@ -28,7 +33,9 @@ import java.text.SimpleDateFormat;
 import java.util.Collections;
 import java.util.Date;
 import java.util.Locale;
+import java.util.UUID;
 
+import rx.Notification;
 import rx.Subscription;
 import rx.functions.Action1;
 
@@ -36,6 +43,7 @@ public class MainActivity extends WearableActivity {
 
     private static final SimpleDateFormat AMBIENT_DATE_FORMAT =
             new SimpleDateFormat("HH:mm:ss", Locale.US);
+    private static final String TAG = "BLE";
 
     private BoxInsetLayout mContainerView;
     private TextView mTextView;
@@ -43,6 +51,8 @@ public class MainActivity extends WearableActivity {
     private TextView mDistanceView;
     private TextView mHrView;
     private boolean mUpdating = false;
+    public Boolean mGranted;
+    public Boolean connected;
 
 
     // A reference to the service used to get location updates.
@@ -76,6 +86,7 @@ public class MainActivity extends WearableActivity {
         }
     };
     private Subscription mScanSubscription;
+    private BluetoothProvider mBluetoothProvider;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -98,12 +109,13 @@ public class MainActivity extends WearableActivity {
                     @Override
                     public void call(Boolean granted) {
                         if (granted) {
+                            mGranted = granted;
                             // Bind to the service. If the service is in foreground mode, this signals to the service
                             // that since this activity is in the foreground, the service can exit foreground mode.
 //                            bindService(new Intent(MainActivity.this, LocationUpdatesService.class), mServiceConnection,
 //                                    Context.BIND_AUTO_CREATE);
-                            scanDevices();
-
+                            connectBLE();
+// When done... unsubscribe and forget about connection teardown :)
 // When done, just unsubscribe.
 
                         } else {
@@ -111,6 +123,60 @@ public class MainActivity extends WearableActivity {
                         }
                     }
                 });
+    }
+
+    private void connectBLE() {
+        if (!connected) {
+            String macAddress = "40:00:00:00:11:C0";
+            RxBleClient rxBleClient = RxBleClient.create(MainActivity.this);
+            RxBleDevice device = rxBleClient.getBleDevice(macAddress);
+            UUID characteristicUuid = UUID.fromString(SampleGattAttributes.HEART_RATE_MEASUREMENT);
+
+            device.establishConnection(false)
+//                    .doOnCompleted(()-> connected = false;)
+                    .flatMap(
+                            rxBleConnection -> {
+                                connected = true;
+                                return rxBleConnection.setupNotification(characteristicUuid);
+                            })
+                    .doOnNext(notificationObservable -> {
+                        // Notification has been set up
+                        Log.d("BLE", "Notification registered");
+                    })
+                    .flatMap(notificationObservable -> notificationObservable) // <-- Notification has been set up, now observe value changes.
+                    .subscribe(
+                            bytes -> {
+                                readData(bytes);
+                                // Given characteristic has been changes, here is the value.
+                            },
+                            throwable -> {
+                                // Handle an error here.
+                                Log.d("BLE", "Read error", throwable);
+                            }
+                    );
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (mGranted) {
+            connectBLE();
+        }
+    }
+
+    private void readData(byte[] bytes) {
+        int heartRate = 0;
+        int flag = bytes[0];
+        int format = -1;
+        if ((flag & 0x01) != 0) {
+            format = ValueInterpreter.FORMAT_UINT16;
+        } else {
+            format = ValueInterpreter.FORMAT_UINT8;
+        }
+        heartRate = ValueInterpreter.getIntValue(bytes, format, 1);
+        Log.d(TAG, "Heart rate " + heartRate);
+        mHrView.setText(heartRate + " Bpm");
     }
 
     private void scanDevices() {
@@ -129,7 +195,7 @@ public class MainActivity extends WearableActivity {
                 .subscribe(new Action1<ScanResult>() {
                     public void call(ScanResult result) {
                         RxBleDevice device = result.getBleDevice();
-                        Log.d("BLE",device.getMacAddress() +"; " +device.getName()+"; " +device.getConnectionState() +"; " + device.getBluetoothDevice().getType() +);
+                        Log.d("BLE", device.getMacAddress() + "; " + device.getName() + "; " + device.getConnectionState() + "; " + device.getBluetoothDevice().getAddress());
                         mTextView.setText("Found devices");
                     }
                 });
@@ -138,7 +204,6 @@ public class MainActivity extends WearableActivity {
     @Override
     protected void onPause() {
         super.onPause();
-        mScanSubscription.unsubscribe();
     }
 
     @Override
