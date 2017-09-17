@@ -37,7 +37,7 @@
         </activity>
 
         <service
-            android:name=".LocationUpdatesService"
+            android:name=".TrackingService"
             android:enabled="true"
             android:exported="false"></service>
     </application>

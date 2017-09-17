@@ -30,8 +30,15 @@ import com.google.android.gms.location.LocationResult;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
+import com.polidea.rxandroidble.RxBleClient;
+import com.polidea.rxandroidble.RxBleConnection;
+import com.polidea.rxandroidble.RxBleDevice;
+import com.polidea.rxandroidble.helpers.ValueInterpreter;
 
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import rx.Subscription;
 
 
 /**
@@ -48,18 +55,19 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * continue. When the activity comes back to the foreground, the foreground service stops, and the
  * notification assocaited with that service is removed.
  */
-public class LocationUpdatesService extends Service {
+public class TrackingService extends Service {
 
     private static final String PACKAGE_NAME =
-            "com.google.android.gms.location.sample.locationupdatesforegroundservice";
+            "cz.tmartinik.runtrack";
 
-    private static final String TAG = LocationUpdatesService.class.getSimpleName();
+    private static final String TAG = TrackingService.class.getSimpleName();
 
     static final String ACTION_BROADCAST = PACKAGE_NAME + ".broadcast";
 
     static final String EXTRA_LOCATION = PACKAGE_NAME + ".location";
     private static final String EXTRA_STARTED_FROM_NOTIFICATION = PACKAGE_NAME +
             ".started_from_notification";
+    static final String EXTRA_HR = PACKAGE_NAME + ".heartRate";
 
     private AtomicBoolean mUpdating = new AtomicBoolean(false);
 
@@ -68,7 +76,7 @@ public class LocationUpdatesService extends Service {
     /**
      * The desired interval for location updates. Inexact. Updates may be more or less frequent.
      */
-    private static final long UPDATE_INTERVAL_IN_MILLISECONDS = 10000;
+    private static final long UPDATE_INTERVAL_IN_MILLISECONDS = 4000;
 
     /**
      * The fastest rate for active location updates. Updates will never be more frequent
@@ -114,8 +122,11 @@ public class LocationUpdatesService extends Service {
     private Location mLocation;
     private SensorManager mSensorManager;
     private Sensor mHeartRateSensor;
+    private boolean connected = false;
+    private RxBleConnection mBluetoothConnection;
+    private Subscription mSubscription;
 
-    public LocationUpdatesService() {
+    public TrackingService() {
     }
 
     @Override
@@ -163,6 +174,62 @@ public class LocationUpdatesService extends Service {
         return START_NOT_STICKY;
     }
 
+    private void connectBleHrMonitor(String address) {
+        if (!connected) {
+            RxBleClient rxBleClient = RxBleClient.create(this);
+            RxBleDevice mDevice = rxBleClient.getBleDevice(address);
+            UUID characteristicUuid = UUID.fromString(SampleGattAttributes.HEART_RATE_MEASUREMENT);
+
+            //                    .doOnCompleted(()-> connected = false;)
+// Notification has been set up
+// <-- Notification has been set up, now observe value changes.
+// Given characteristic has been changes, here is the value.
+// Handle an error here.
+            mSubscription = mDevice.establishConnection(false)
+//                    .doOnCompleted(()-> connected = false;)
+                    .flatMap(
+                            rxBleConnection -> {
+                                if(rxBleConnection != null) {
+                                    connected = true;
+                                    return rxBleConnection.setupNotification(characteristicUuid);
+                                }
+                                return null;
+                            })
+                    .doOnNext(notificationObservable -> {
+                        // Notification has been set up
+                        Log.d("BLE", "Notification registered");
+                    })
+                    .flatMap(notificationObservable -> notificationObservable) // <-- Notification has been set up, now observe value changes.
+                    .subscribe(
+                            bytes -> {
+                                // Given characteristic has been changes, here is the value.
+                                readData(bytes);
+                            },
+                            throwable -> {
+                                // Handle an error here.
+                                Log.d("BLE", "Read error", throwable);
+                            }
+                    );
+        }
+    }
+
+
+    private void readData(byte[] bytes) {
+        int heartRate = 0;
+        int flag = bytes[0];
+        int format = -1;
+        if ((flag & 0x01) != 0) {
+            format = ValueInterpreter.FORMAT_UINT16;
+        } else {
+            format = ValueInterpreter.FORMAT_UINT8;
+        }
+        heartRate = ValueInterpreter.getIntValue(bytes, format, 1);
+        Log.d(TAG, "Heart rate " + heartRate);
+        Intent intent = new Intent(ACTION_BROADCAST);
+        intent.putExtra(EXTRA_HR, heartRate);
+        LocalBroadcastManager.getInstance(getApplicationContext()).sendBroadcast(intent);
+    }
+
     @Override
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
@@ -200,15 +267,6 @@ public class LocationUpdatesService extends Service {
         // do nothing. Otherwise, we make this service a foreground service.
         if (!mChangingConfiguration && Utils.requestingLocationUpdates(this)) {
             Log.i(TAG, "Starting foreground service");
-            /*
-            // TODO(developer). If targeting O, use the following code.
-            if (Build.VERSION.SDK_INT == Build.VERSION_CODES.O) {
-                mNotificationManager.startServiceInForeground(new Intent(this,
-                        LocationUpdatesService.class), NOTIFICATION_ID, getNotification());
-            } else {
-                startForeground(NOTIFICATION_ID, getNotification());
-            }
-             */
             startForeground(NOTIFICATION_ID, getNotification());
         }
         return true; // Ensures onRebind() is called when a client re-binds.
@@ -226,11 +284,12 @@ public class LocationUpdatesService extends Service {
     public void requestLocationUpdates() {
         Log.i(TAG, "Requesting location updates");
         Utils.setRequestingLocationUpdates(this, true);
-        startService(new Intent(getApplicationContext(), LocationUpdatesService.class));
+        startService(new Intent(getApplicationContext(), TrackingService.class));
         try {
             mFusedLocationClient.requestLocationUpdates(mLocationRequest,
                     mLocationCallback, Looper.myLooper());
             mUpdating.set(true);
+            connectBleHrMonitor("40:00:00:00:11:C0");
         } catch (SecurityException unlikely) {
             Utils.setRequestingLocationUpdates(this, false);
             Log.e(TAG, "Lost location permission. Could not request updates. " + unlikely);
@@ -245,6 +304,7 @@ public class LocationUpdatesService extends Service {
         Log.i(TAG, "Removing location updates");
         try {
             mFusedLocationClient.removeLocationUpdates(mLocationCallback);
+            mSubscription.unsubscribe();
             mUpdating.set(false);
             Utils.setRequestingLocationUpdates(this, false);
             stopSelf();
@@ -262,7 +322,7 @@ public class LocationUpdatesService extends Service {
      * Returns the {@link NotificationCompat} used as part of the foreground service.
      */
     private Notification getNotification() {
-        Intent intent = new Intent(this, LocationUpdatesService.class);
+        Intent intent = new Intent(this, TrackingService.class);
 
         CharSequence text = Utils.getLocationText(mLocation);
 
@@ -340,8 +400,8 @@ public class LocationUpdatesService extends Service {
      * clients, we don't need to deal with IPC.
      */
     public class LocalBinder extends Binder {
-        LocationUpdatesService getService() {
-            return LocationUpdatesService.this;
+        TrackingService getService() {
+            return TrackingService.this;
         }
     }
 

@@ -1,41 +1,38 @@
 package runtrack.tmartinik.cz.runtrack;
 
 import android.Manifest;
-import android.bluetooth.BluetoothGattCharacteristic;
-import android.bluetooth.BluetoothGattDescriptor;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.ServiceConnection;
+import android.content.pm.PackageManager;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventCallback;
+import android.hardware.SensorManager;
 import android.location.Location;
 import android.os.Bundle;
 import android.os.IBinder;
-import android.os.ParcelUuid;
 import android.support.wear.widget.BoxInsetLayout;
 import android.support.wearable.activity.WearableActivity;
-import android.text.TextUtils;
 import android.util.Log;
 import android.view.View;
 import android.widget.TextView;
 
 import com.polidea.rxandroidble.RxBleClient;
-import com.polidea.rxandroidble.RxBleConnection;
 import com.polidea.rxandroidble.RxBleDevice;
-import com.polidea.rxandroidble.RxBleDeviceServices;
 import com.polidea.rxandroidble.helpers.ValueInterpreter;
-import com.polidea.rxandroidble.scan.ScanFilter;
 import com.polidea.rxandroidble.scan.ScanResult;
 import com.polidea.rxandroidble.scan.ScanSettings;
 import com.tbruyelle.rxpermissions.RxPermissions;
 
 import java.text.SimpleDateFormat;
-import java.util.Collections;
 import java.util.Date;
 import java.util.Locale;
 import java.util.UUID;
 
-import rx.Notification;
 import rx.Subscription;
 import rx.functions.Action1;
 
@@ -51,12 +48,14 @@ public class MainActivity extends WearableActivity {
     private TextView mDistanceView;
     private TextView mHrView;
     private boolean mUpdating = false;
-    public Boolean mGranted;
-    public Boolean connected;
+    public boolean mGranted = false;
+    public boolean connected = false;
+
+    private SensorEventCallback mSensorListener;
 
 
     // A reference to the service used to get location updates.
-    private LocationUpdatesService mService = null;
+    private TrackingService mService = null;
 
     private MyReceiver myReceiver;
 
@@ -67,7 +66,7 @@ public class MainActivity extends WearableActivity {
 
         @Override
         public void onServiceConnected(ComponentName name, IBinder service) {
-            LocationUpdatesService.LocalBinder binder = (LocationUpdatesService.LocalBinder) service;
+            TrackingService.LocalBinder binder = (TrackingService.LocalBinder) service;
             mService = binder.getService();
             mBound = true;
             mUpdating = mService.isUpdating();
@@ -86,7 +85,11 @@ public class MainActivity extends WearableActivity {
         }
     };
     private Subscription mScanSubscription;
-    private BluetoothProvider mBluetoothProvider;
+    private Sensor mHeartRateSensor;
+    private SensorManager mSensorManager;
+    private Sensor mStepDetectorSensor;
+    private SensorEventCallback mStepListener;
+    private int mSteps = -1;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -101,6 +104,7 @@ public class MainActivity extends WearableActivity {
         mHrView = (TextView) findViewById(R.id.hr);
 
         myReceiver = new MyReceiver();
+        registerReceiver(myReceiver, new IntentFilter(TrackingService.ACTION_BROADCAST));
 
         RxPermissions rxPermissions = new RxPermissions(MainActivity.this);
         rxPermissions
@@ -112,12 +116,8 @@ public class MainActivity extends WearableActivity {
                             mGranted = granted;
                             // Bind to the service. If the service is in foreground mode, this signals to the service
                             // that since this activity is in the foreground, the service can exit foreground mode.
-//                            bindService(new Intent(MainActivity.this, LocationUpdatesService.class), mServiceConnection,
-//                                    Context.BIND_AUTO_CREATE);
-                            connectBLE();
-// When done... unsubscribe and forget about connection teardown :)
-// When done, just unsubscribe.
-
+                            bindService(new Intent(MainActivity.this, TrackingService.class), mServiceConnection,
+                                    Context.BIND_AUTO_CREATE);
                         } else {
                             mClockView.setText("Permissions missing");
                         }
@@ -125,58 +125,54 @@ public class MainActivity extends WearableActivity {
                 });
     }
 
-    private void connectBLE() {
-        if (!connected) {
-            String macAddress = "40:00:00:00:11:C0";
-            RxBleClient rxBleClient = RxBleClient.create(MainActivity.this);
-            RxBleDevice device = rxBleClient.getBleDevice(macAddress);
-            UUID characteristicUuid = UUID.fromString(SampleGattAttributes.HEART_RATE_MEASUREMENT);
-
-            device.establishConnection(false)
-//                    .doOnCompleted(()-> connected = false;)
-                    .flatMap(
-                            rxBleConnection -> {
-                                connected = true;
-                                return rxBleConnection.setupNotification(characteristicUuid);
-                            })
-                    .doOnNext(notificationObservable -> {
-                        // Notification has been set up
-                        Log.d("BLE", "Notification registered");
-                    })
-                    .flatMap(notificationObservable -> notificationObservable) // <-- Notification has been set up, now observe value changes.
-                    .subscribe(
-                            bytes -> {
-                                readData(bytes);
-                                // Given characteristic has been changes, here is the value.
-                            },
-                            throwable -> {
-                                // Handle an error here.
-                                Log.d("BLE", "Read error", throwable);
-                            }
-                    );
+    private void registerStepsSensor() {
+        if (getPackageManager().hasSystemFeature(PackageManager.FEATURE_SENSOR_STEP_COUNTER)) {
+            mSensorManager = ((SensorManager) getSystemService(SENSOR_SERVICE));
+            mStepDetectorSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER);
+            mStepListener = new SensorEventCallback() {
+                @Override
+                public void onSensorChanged(SensorEvent event) {
+                    if (event.sensor.getType() == Sensor.TYPE_STEP_COUNTER) {
+                        if (mSteps == -1) {
+                            mSteps = -(int) event.values[0];
+                        }
+                        mSteps += event.values[0];
+                        String msg = "" + mSteps;
+                        mTextView.setText(msg);
+                        Log.d("Steps", msg);
+                    } else
+                        Log.d(TAG, "Unknown sensor type");
+                }
+            };
+            mSensorManager.registerListener(mStepListener, mStepDetectorSensor, mSensorManager.SENSOR_DELAY_FASTEST);
+        } else {
+            Log.d(TAG, "No steps detector");
         }
+    }
+
+    private void registerInternalHrSenzor() {
+        mSensorManager = ((SensorManager) getSystemService(SENSOR_SERVICE));
+        mHeartRateSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_HEART_RATE);
+
+        mSensorListener = new SensorEventCallback() {
+            @Override
+            public void onSensorChanged(SensorEvent event) {
+                if (event.sensor.getType() == Sensor.TYPE_HEART_RATE) {
+                    String msg = "" + (int) event.values[0];
+                    mHrView.setText(msg);
+                    Log.d("Watch HR", msg);
+                } else
+                    Log.d(TAG, "Unknown sensor type");
+            }
+        };
+        mSensorManager.registerListener(mSensorListener, mHeartRateSensor, mSensorManager.SENSOR_DELAY_FASTEST);
     }
 
     @Override
     protected void onResume() {
         super.onResume();
         if (mGranted) {
-            connectBLE();
         }
-    }
-
-    private void readData(byte[] bytes) {
-        int heartRate = 0;
-        int flag = bytes[0];
-        int format = -1;
-        if ((flag & 0x01) != 0) {
-            format = ValueInterpreter.FORMAT_UINT16;
-        } else {
-            format = ValueInterpreter.FORMAT_UINT8;
-        }
-        heartRate = ValueInterpreter.getIntValue(bytes, format, 1);
-        Log.d(TAG, "Heart rate " + heartRate);
-        mHrView.setText(heartRate + " Bpm");
     }
 
     private void scanDevices() {
@@ -209,8 +205,9 @@ public class MainActivity extends WearableActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
-//        mService.removeLocationUpdates();
-//        unbindService(mServiceConnection);
+        unregisterReceiver(myReceiver);
+        mService.removeLocationUpdates();
+        unbindService(mServiceConnection);
     }
 
     @Override
@@ -248,14 +245,24 @@ public class MainActivity extends WearableActivity {
     }
 
     /**
-     * Receiver for broadcasts sent by {@link LocationUpdatesService}.
+     * Receiver for broadcasts sent by {@link TrackingService}.
      */
     private class MyReceiver extends BroadcastReceiver {
         @Override
         public void onReceive(Context context, Intent intent) {
-            Location location = intent.getParcelableExtra(LocationUpdatesService.EXTRA_LOCATION);
+            Location location = intent.getParcelableExtra(TrackingService.EXTRA_LOCATION);
+            Integer hr = intent.getParcelableExtra(TrackingService.EXTRA_HR);
             if (location != null) {
-                mTextView.setText(Utils.getLocationText(location));
+                MainActivity.this.runOnUiThread(() ->
+                        mTextView.setText(Utils.getLocationText(location))
+                );
+            }
+
+            if (hr != null) {
+                MainActivity.this.runOnUiThread(() ->
+                        mHrView.setText(hr + " Bpm")
+                );
+
             }
         }
     }
