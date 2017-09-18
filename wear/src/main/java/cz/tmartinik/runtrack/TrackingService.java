@@ -1,4 +1,4 @@
-package runtrack.tmartinik.cz.runtrack;
+package cz.tmartinik.runtrack;
 
 import android.app.ActivityManager;
 import android.app.Notification;
@@ -9,8 +9,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.res.Configuration;
 import android.hardware.Sensor;
-import android.hardware.SensorEvent;
-import android.hardware.SensorEventCallback;
 import android.hardware.SensorManager;
 import android.location.Location;
 import android.os.Binder;
@@ -30,14 +28,14 @@ import com.google.android.gms.location.LocationResult;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
-import com.polidea.rxandroidble.RxBleClient;
 import com.polidea.rxandroidble.RxBleConnection;
-import com.polidea.rxandroidble.RxBleDevice;
-import com.polidea.rxandroidble.helpers.ValueInterpreter;
 
-import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import cz.tmartinik.runtrack.logic.sensor.HrSensorEvent;
+import cz.tmartinik.runtrack.logic.sensor.HrSensorProvider;
+import cz.tmartinik.runtrack.logic.sensor.InternalHrSensorProvider;
+import cz.tmartinik.runtrack.logic.sensor.SensorListener;
 import rx.Subscription;
 
 
@@ -55,7 +53,7 @@ import rx.Subscription;
  * continue. When the activity comes back to the foreground, the foreground service stops, and the
  * notification assocaited with that service is removed.
  */
-public class TrackingService extends Service {
+public class TrackingService extends Service implements SensorListener<HrSensorEvent> {
 
     private static final String PACKAGE_NAME =
             "cz.tmartinik.runtrack";
@@ -125,6 +123,7 @@ public class TrackingService extends Service {
     private boolean connected = false;
     private RxBleConnection mBluetoothConnection;
     private Subscription mSubscription;
+    private HrSensorProvider mHrProvider;
 
     public TrackingService() {
     }
@@ -142,13 +141,6 @@ public class TrackingService extends Service {
         };
 
         mSensorManager = ((SensorManager) getSystemService(SENSOR_SERVICE));
-        mHeartRateSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_HEART_RATE);
-
-        mSensorManager.registerListener(new SensorEventCallback() {
-            @Override
-            public void onSensorChanged(SensorEvent event) {
-            }
-        }, mHeartRateSensor, mSensorManager.SENSOR_DELAY_FASTEST);
 
         createLocationRequest();
         getLastLocation();
@@ -172,62 +164,6 @@ public class TrackingService extends Service {
         }
         // Tells the system to not try to recreate the service after it has been killed.
         return START_NOT_STICKY;
-    }
-
-    private void connectBleHrMonitor(String address) {
-        if (!connected) {
-            RxBleClient rxBleClient = RxBleClient.create(this);
-            RxBleDevice mDevice = rxBleClient.getBleDevice(address);
-            UUID characteristicUuid = UUID.fromString(SampleGattAttributes.HEART_RATE_MEASUREMENT);
-
-            //                    .doOnCompleted(()-> connected = false;)
-// Notification has been set up
-// <-- Notification has been set up, now observe value changes.
-// Given characteristic has been changes, here is the value.
-// Handle an error here.
-            mSubscription = mDevice.establishConnection(false)
-//                    .doOnCompleted(()-> connected = false;)
-                    .flatMap(
-                            rxBleConnection -> {
-                                if(rxBleConnection != null) {
-                                    connected = true;
-                                    return rxBleConnection.setupNotification(characteristicUuid);
-                                }
-                                return null;
-                            })
-                    .doOnNext(notificationObservable -> {
-                        // Notification has been set up
-                        Log.d("BLE", "Notification registered");
-                    })
-                    .flatMap(notificationObservable -> notificationObservable) // <-- Notification has been set up, now observe value changes.
-                    .subscribe(
-                            bytes -> {
-                                // Given characteristic has been changes, here is the value.
-                                readData(bytes);
-                            },
-                            throwable -> {
-                                // Handle an error here.
-                                Log.d("BLE", "Read error", throwable);
-                            }
-                    );
-        }
-    }
-
-
-    private void readData(byte[] bytes) {
-        int heartRate = 0;
-        int flag = bytes[0];
-        int format = -1;
-        if ((flag & 0x01) != 0) {
-            format = ValueInterpreter.FORMAT_UINT16;
-        } else {
-            format = ValueInterpreter.FORMAT_UINT8;
-        }
-        heartRate = ValueInterpreter.getIntValue(bytes, format, 1);
-        Log.d(TAG, "Heart rate " + heartRate);
-        Intent intent = new Intent(ACTION_BROADCAST);
-        intent.putExtra(EXTRA_HR, heartRate);
-        LocalBroadcastManager.getInstance(getApplicationContext()).sendBroadcast(intent);
     }
 
     @Override
@@ -289,7 +225,11 @@ public class TrackingService extends Service {
             mFusedLocationClient.requestLocationUpdates(mLocationRequest,
                     mLocationCallback, Looper.myLooper());
             mUpdating.set(true);
-            connectBleHrMonitor("40:00:00:00:11:C0");
+
+            //TODO: Create request with hrMonitor, etc
+//            mHrProvider = new BluetoothHrSensorProvider("40:00:00:00:11:C0");
+            mHrProvider = new InternalHrSensorProvider();
+            mHrProvider.register(this, this);
         } catch (SecurityException unlikely) {
             Utils.setRequestingLocationUpdates(this, false);
             Log.e(TAG, "Lost location permission. Could not request updates. " + unlikely);
@@ -306,6 +246,7 @@ public class TrackingService extends Service {
             mFusedLocationClient.removeLocationUpdates(mLocationCallback);
             mSubscription.unsubscribe();
             mUpdating.set(false);
+            mHrProvider.unregister();
             Utils.setRequestingLocationUpdates(this, false);
             stopSelf();
         } catch (SecurityException unlikely) {
@@ -393,6 +334,19 @@ public class TrackingService extends Service {
         mLocationRequest.setInterval(UPDATE_INTERVAL_IN_MILLISECONDS);
         mLocationRequest.setFastestInterval(FASTEST_UPDATE_INTERVAL_IN_MILLISECONDS);
         mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
+    }
+
+    @Override
+    public void notify(HrSensorEvent event) {
+        // Notify anyone listening for broadcasts about the new location.
+        Intent intent = new Intent(ACTION_BROADCAST);
+        switch (event.getType()){
+            case DATA:
+                intent.putExtra(EXTRA_HR, event.getHeartRate());
+                break;
+        }
+
+        LocalBroadcastManager.getInstance(getApplicationContext()).sendBroadcast(intent);
     }
 
     /**

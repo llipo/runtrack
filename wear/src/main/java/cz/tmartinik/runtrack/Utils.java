@@ -1,4 +1,4 @@
-package runtrack.tmartinik.cz.runtrack;
+package cz.tmartinik.runtrack;
 
 /**
  * Created by tmartinik on 13.9.2017.

@@ -1,4 +1,4 @@
-package runtrack.tmartinik.cz.runtrack;
+package cz.tmartinik.runtrack;
 
 import android.Manifest;
 import android.content.BroadcastReceiver;
@@ -23,7 +23,6 @@ import android.widget.TextView;
 
 import com.polidea.rxandroidble.RxBleClient;
 import com.polidea.rxandroidble.RxBleDevice;
-import com.polidea.rxandroidble.helpers.ValueInterpreter;
 import com.polidea.rxandroidble.scan.ScanResult;
 import com.polidea.rxandroidble.scan.ScanSettings;
 import com.tbruyelle.rxpermissions.RxPermissions;
@@ -31,7 +30,6 @@ import com.tbruyelle.rxpermissions.RxPermissions;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
-import java.util.UUID;
 
 import rx.Subscription;
 import rx.functions.Action1;
@@ -50,9 +48,6 @@ public class MainActivity extends WearableActivity {
     private boolean mUpdating = false;
     public boolean mGranted = false;
     public boolean connected = false;
-
-    private SensorEventCallback mSensorListener;
-
 
     // A reference to the service used to get location updates.
     private TrackingService mService = null;
@@ -85,11 +80,10 @@ public class MainActivity extends WearableActivity {
         }
     };
     private Subscription mScanSubscription;
-    private Sensor mHeartRateSensor;
-    private SensorManager mSensorManager;
     private Sensor mStepDetectorSensor;
     private SensorEventCallback mStepListener;
     private int mSteps = -1;
+    private SensorManager mSensorManager;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -150,23 +144,6 @@ public class MainActivity extends WearableActivity {
         }
     }
 
-    private void registerInternalHrSenzor() {
-        mSensorManager = ((SensorManager) getSystemService(SENSOR_SERVICE));
-        mHeartRateSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_HEART_RATE);
-
-        mSensorListener = new SensorEventCallback() {
-            @Override
-            public void onSensorChanged(SensorEvent event) {
-                if (event.sensor.getType() == Sensor.TYPE_HEART_RATE) {
-                    String msg = "" + (int) event.values[0];
-                    mHrView.setText(msg);
-                    Log.d("Watch HR", msg);
-                } else
-                    Log.d(TAG, "Unknown sensor type");
-            }
-        };
-        mSensorManager.registerListener(mSensorListener, mHeartRateSensor, mSensorManager.SENSOR_DELAY_FASTEST);
-    }
 
     @Override
     protected void onResume() {

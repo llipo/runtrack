@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="runtrack.tmartinik.cz.runtrack">
+    package="cz.tmartinik.runtrack">
 
     <uses-feature android:name="android.hardware.type.watch" />
 
@@ -26,7 +26,7 @@
             android:required="false" />
 
         <activity
-            android:name=".MainActivity"
+            android:name="cz.tmartinik.runtrack.MainActivity"
             android:label="@string/app_name"
             android:theme="@android:style/Theme.DeviceDefault.Light">
             <intent-filter>
@@ -37,7 +37,7 @@
         </activity>
 
         <service
-            android:name=".TrackingService"
+            android:name="cz.tmartinik.runtrack.TrackingService"
             android:enabled="true"
             android:exported="false"></service>
     </application>

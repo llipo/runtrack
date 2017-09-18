@@ -4,7 +4,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context="runtrack.tmartinik.cz.runtrack.MainActivity">
+    tools:context="cz.tmartinik.runtrack.MainActivity">
 
     <android.support.design.widget.AppBarLayout
         android:layout_width="match_parent"

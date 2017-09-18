@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package runtrack.tmartinik.cz.runtrack;
+package cz.tmartinik.runtrack;
 
 import java.util.HashMap;
 
