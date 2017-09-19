@@ -1,18 +1,15 @@
 package cz.tmartinik.runtrack;
 
 import android.Manifest;
-import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventCallback;
 import android.hardware.SensorManager;
-import android.location.Location;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.support.wear.widget.BoxInsetLayout;
@@ -21,26 +18,28 @@ import android.util.Log;
 import android.view.View;
 import android.widget.TextView;
 
-import com.polidea.rxandroidble.RxBleClient;
-import com.polidea.rxandroidble.RxBleDevice;
-import com.polidea.rxandroidble.scan.ScanResult;
-import com.polidea.rxandroidble.scan.ScanSettings;
 import com.tbruyelle.rxpermissions.RxPermissions;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
 
+import cz.tmartinik.runtrack.logic.bus.RxBus;
+import cz.tmartinik.runtrack.logic.event.TrackingEvent;
+import cz.tmartinik.runtrack.logic.event.TrackingHrEvent;
+import cz.tmartinik.runtrack.logic.event.TrackingStateEvent;
+import cz.tmartinik.runtrack.ui.StartFragment;
 import rx.Subscription;
 import rx.functions.Action1;
 
-public class MainActivity extends WearableActivity {
+public class MainActivity extends WearableActivity implements StartFragment.OnFragmentInteractionListener {
 
     private static final SimpleDateFormat AMBIENT_DATE_FORMAT =
             new SimpleDateFormat("HH:mm:ss", Locale.US);
     private static final String TAG = "BLE";
 
     private BoxInsetLayout mContainerView;
+    private View container;
     private TextView mTextView;
     private TextView mClockView;
     private TextView mDistanceView;
@@ -52,8 +51,6 @@ public class MainActivity extends WearableActivity {
     // A reference to the service used to get location updates.
     private TrackingService mService = null;
 
-    private MyReceiver myReceiver;
-
     // Tracks the bound state of the service.
     private boolean mBound = false;
     // Monitors the state of the connection to the service.
@@ -61,15 +58,18 @@ public class MainActivity extends WearableActivity {
 
         @Override
         public void onServiceConnected(ComponentName name, IBinder service) {
+            Log.d(TAG, "Service connected");
             TrackingService.LocalBinder binder = (TrackingService.LocalBinder) service;
             mService = binder.getService();
             mBound = true;
             mUpdating = mService.isUpdating();
             if (mUpdating) {
-                //TODO:
+                Log.d(TAG, "Service updating");
+                //TODO: show normal UI
             } else {
-                mService.requestLocationUpdates();
+                Log.d(TAG, "Service not updating");
                 //TODO:
+                getFragmentManager().beginTransaction().replace(R.id.container, new StartFragment(), "start").commit();
             }
         }
 
@@ -79,11 +79,11 @@ public class MainActivity extends WearableActivity {
             mBound = false;
         }
     };
-    private Subscription mScanSubscription;
     private Sensor mStepDetectorSensor;
     private SensorEventCallback mStepListener;
     private int mSteps = -1;
     private SensorManager mSensorManager;
+    private Subscription mReg;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -97,26 +97,30 @@ public class MainActivity extends WearableActivity {
         mDistanceView = (TextView) findViewById(R.id.distance);
         mHrView = (TextView) findViewById(R.id.hr);
 
-        myReceiver = new MyReceiver();
-        registerReceiver(myReceiver, new IntentFilter(TrackingService.ACTION_BROADCAST));
-
         RxPermissions rxPermissions = new RxPermissions(MainActivity.this);
         rxPermissions
                 .request(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.BODY_SENSORS, Manifest.permission.BLUETOOTH)
                 .subscribe(new Action1<Boolean>() {
                     @Override
                     public void call(Boolean granted) {
+                        // Bind to the service. If the service is in foreground mode, this signals to the service
+                        // that since this activity is in the foreground, the service can exit foreground mode.
                         if (granted) {
                             mGranted = granted;
-                            // Bind to the service. If the service is in foreground mode, this signals to the service
-                            // that since this activity is in the foreground, the service can exit foreground mode.
-                            bindService(new Intent(MainActivity.this, TrackingService.class), mServiceConnection,
-                                    Context.BIND_AUTO_CREATE);
                         } else {
                             mClockView.setText("Permissions missing");
                         }
                     }
                 });
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        if (mService == null) {
+            bindService(new Intent(MainActivity.this, TrackingService.class), mServiceConnection,
+                    Context.BIND_AUTO_CREATE);
+        }
     }
 
     private void registerStepsSensor() {
@@ -148,42 +152,36 @@ public class MainActivity extends WearableActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        if (mGranted) {
-        }
+        mReg = RxBus.getInstance().register(TrackingEvent.class, event -> {
+            MainActivity.this.runOnUiThread(() -> handleTrackingEvent(event));
+        });
+        RxBus.getInstance().register(TrackingHrEvent.class, event -> {
+            MainActivity.this.runOnUiThread(() -> handleTrackingEvent(event));
+        });
     }
 
-    private void scanDevices() {
-        RxBleClient rxBleClient = RxBleClient.create(MainActivity.this);
-        // change if needed
-// change if needed
-// add filters if needed
-        mScanSubscription = rxBleClient.scanBleDevices(
-                new ScanSettings.Builder()
-                        .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY) // change if needed
-                        .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES) // change if needed
-                        .build()
-//                , new ScanFilter[]{new ScanFilter.Builder().setServiceUuid(ParcelUuid.fromString("00002a37-0000-1000-8000-00805f9b34fb")).build()}
-                // add filters if needed
-        )
-                .subscribe(new Action1<ScanResult>() {
-                    public void call(ScanResult result) {
-                        RxBleDevice device = result.getBleDevice();
-                        Log.d("BLE", device.getMacAddress() + "; " + device.getName() + "; " + device.getConnectionState() + "; " + device.getBluetoothDevice().getAddress());
-                        mTextView.setText("Found devices");
-                    }
-                });
+    private void handleTrackingEvent(TrackingEvent event) {
+        if(event instanceof TrackingStateEvent) {
+            switch (((TrackingStateEvent) event).getAction()) {
+                case START:
+                    break;
+                case STOP:
+            }
+        }else if(event instanceof TrackingHrEvent){
+            mHrView.setText(((TrackingHrEvent) event).getHr());
+        }
+        //TODO handle tracking events
     }
 
     @Override
     protected void onPause() {
         super.onPause();
+        mReg.unsubscribe();
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        unregisterReceiver(myReceiver);
-        mService.removeLocationUpdates();
         unbindService(mServiceConnection);
     }
 
@@ -221,28 +219,8 @@ public class MainActivity extends WearableActivity {
         }
     }
 
-    /**
-     * Receiver for broadcasts sent by {@link TrackingService}.
-     */
-    private class MyReceiver extends BroadcastReceiver {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            Location location = intent.getParcelableExtra(TrackingService.EXTRA_LOCATION);
-            Integer hr = intent.getParcelableExtra(TrackingService.EXTRA_HR);
-            if (location != null) {
-                MainActivity.this.runOnUiThread(() ->
-                        mTextView.setText(Utils.getLocationText(location))
-                );
-            }
+    @Override
+    public void onTrackingStarted() {
 
-            if (hr != null) {
-                MainActivity.this.runOnUiThread(() ->
-                        mHrView.setText(hr + " Bpm")
-                );
-
-            }
-        }
     }
-
-
 }

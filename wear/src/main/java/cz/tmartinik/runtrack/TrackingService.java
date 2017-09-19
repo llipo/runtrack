@@ -18,7 +18,6 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.support.annotation.NonNull;
 import android.support.v4.app.NotificationCompat;
-import android.support.v4.content.LocalBroadcastManager;
 import android.util.Log;
 
 import com.google.android.gms.location.FusedLocationProviderClient;
@@ -32,6 +31,9 @@ import com.polidea.rxandroidble.RxBleConnection;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import cz.tmartinik.runtrack.logic.bus.RxBus;
+import cz.tmartinik.runtrack.logic.event.TrackingHrEvent;
+import cz.tmartinik.runtrack.logic.event.TrackingLocationEvent;
 import cz.tmartinik.runtrack.logic.sensor.HrSensorEvent;
 import cz.tmartinik.runtrack.logic.sensor.HrSensorProvider;
 import cz.tmartinik.runtrack.logic.sensor.InternalHrSensorProvider;
@@ -42,11 +44,11 @@ import rx.Subscription;
 /**
  * A bound and started service that is promoted to a foreground service when location updates have
  * been requested and all clients unbind.
- *
+ * <p>
  * For apps running in the background on "O" devices, location is computed only once every 10
  * minutes and delivered batched every 30 minutes. This restriction applies even to apps
  * targeting "N" or lower which are run on "O" devices.
- *
+ * <p>
  * This sample show how to use a long-running service for location updates. When an activity is
  * bound to this service, frequent location updates are permitted. When the activity is removed
  * from the foreground, the service promotes itself to a foreground service, and location updates
@@ -60,7 +62,7 @@ public class TrackingService extends Service implements SensorListener<HrSensorE
 
     private static final String TAG = TrackingService.class.getSimpleName();
 
-    static final String ACTION_BROADCAST = PACKAGE_NAME + ".broadcast";
+    public static final String ACTION_BROADCAST = PACKAGE_NAME + ".broadcast";
 
     static final String EXTRA_LOCATION = PACKAGE_NAME + ".location";
     private static final String EXTRA_STARTED_FROM_NOTIFICATION = PACKAGE_NAME +
@@ -143,8 +145,6 @@ public class TrackingService extends Service implements SensorListener<HrSensorE
         mSensorManager = ((SensorManager) getSystemService(SENSOR_SERVICE));
 
         createLocationRequest();
-        getLastLocation();
-
         HandlerThread handlerThread = new HandlerThread(TAG);
         handlerThread.start();
         mServiceHandler = new Handler(handlerThread.getLooper());
@@ -315,10 +315,7 @@ public class TrackingService extends Service implements SensorListener<HrSensorE
 
         mLocation = location;
 
-        // Notify anyone listening for broadcasts about the new location.
-        Intent intent = new Intent(ACTION_BROADCAST);
-        intent.putExtra(EXTRA_LOCATION, location);
-        LocalBroadcastManager.getInstance(getApplicationContext()).sendBroadcast(intent);
+        RxBus.getInstance().post(new TrackingLocationEvent(location));
 
         // Update notification content if running as a foreground service.
         if (serviceIsRunningInForeground(this)) {
@@ -338,15 +335,11 @@ public class TrackingService extends Service implements SensorListener<HrSensorE
 
     @Override
     public void notify(HrSensorEvent event) {
-        // Notify anyone listening for broadcasts about the new location.
-        Intent intent = new Intent(ACTION_BROADCAST);
-        switch (event.getType()){
+        switch (event.getType()) {
             case DATA:
-                intent.putExtra(EXTRA_HR, event.getHeartRate());
+                RxBus.getInstance().post(new TrackingHrEvent(event.getHeartRate()));
                 break;
         }
-
-        LocalBroadcastManager.getInstance(getApplicationContext()).sendBroadcast(intent);
     }
 
     /**
@@ -354,7 +347,7 @@ public class TrackingService extends Service implements SensorListener<HrSensorE
      * clients, we don't need to deal with IPC.
      */
     public class LocalBinder extends Binder {
-        TrackingService getService() {
+        public TrackingService getService() {
             return TrackingService.this;
         }
     }
