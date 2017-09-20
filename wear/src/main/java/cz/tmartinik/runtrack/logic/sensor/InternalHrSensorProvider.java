@@ -30,7 +30,7 @@ public class InternalHrSensorProvider implements HrSensorProvider {
                     int heartRate = (int) event.values[0];
                     Log.d(TAG, "HR:" + heartRate);
                     //Notify listener
-                    listener.notify(new HrSensorEvent(heartRate));
+                    listener.onSensorEvent(new HrSensorEvent(heartRate));
                 } else
                     Log.d(TAG, "Unknown sensor type");
             }

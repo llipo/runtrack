@@ -59,7 +59,7 @@ public class BluetoothHrSensorProvider implements HrSensorProvider {
                                 // Given characteristic has been changes, here is the value.
                                 int heartRate = readData(bytes);
                                 Log.d(TAG, "Heart rate " + heartRate);
-                                listener.notify(new HrSensorEvent(heartRate));
+                                listener.onSensorEvent(new HrSensorEvent(heartRate));
                             },
                             throwable -> {
                                 // Handle an error here.

@@ -8,15 +8,12 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.content.res.Configuration;
-import android.hardware.Sensor;
-import android.hardware.SensorManager;
 import android.location.Location;
 import android.os.Binder;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.Looper;
-import android.support.annotation.NonNull;
 import android.support.v4.app.NotificationCompat;
 import android.util.Log;
 
@@ -25,20 +22,24 @@ import com.google.android.gms.location.LocationCallback;
 import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationResult;
 import com.google.android.gms.location.LocationServices;
-import com.google.android.gms.tasks.OnCompleteListener;
-import com.google.android.gms.tasks.Task;
-import com.polidea.rxandroidble.RxBleConnection;
+
+import org.joda.time.Duration;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import cz.tmartinik.runtrack.logic.bus.RxBus;
 import cz.tmartinik.runtrack.logic.event.TrackingHrEvent;
 import cz.tmartinik.runtrack.logic.event.TrackingLocationEvent;
+import cz.tmartinik.runtrack.logic.event.TrackingStateEvent;
 import cz.tmartinik.runtrack.logic.sensor.HrSensorEvent;
 import cz.tmartinik.runtrack.logic.sensor.HrSensorProvider;
 import cz.tmartinik.runtrack.logic.sensor.InternalHrSensorProvider;
 import cz.tmartinik.runtrack.logic.sensor.SensorListener;
-import rx.Subscription;
+import cz.tmartinik.runtrack.logic.store.MemoryTrackingStore;
+import cz.tmartinik.runtrack.logic.store.TrackingStore;
+import cz.tmartinik.runtrack.model.Tempo;
+import cz.tmartinik.runtrack.model.Track;
+import cz.tmartinik.runtrack.model.TrackSegment;
 
 
 /**
@@ -120,12 +121,11 @@ public class TrackingService extends Service implements SensorListener<HrSensorE
      * The current location.
      */
     private Location mLocation;
-    private SensorManager mSensorManager;
-    private Sensor mHeartRateSensor;
-    private boolean connected = false;
-    private RxBleConnection mBluetoothConnection;
-    private Subscription mSubscription;
     private HrSensorProvider mHrProvider;
+    private TrackingStore mStore;
+    private TrackSegment mActualSegment;
+
+    private Integer mLastHr;
 
     public TrackingService() {
     }
@@ -142,8 +142,7 @@ public class TrackingService extends Service implements SensorListener<HrSensorE
             }
         };
 
-        mSensorManager = ((SensorManager) getSystemService(SENSOR_SERVICE));
-
+        mStore = MemoryTrackingStore.getInstance();
         createLocationRequest();
         HandlerThread handlerThread = new HandlerThread(TAG);
         handlerThread.start();
@@ -159,11 +158,22 @@ public class TrackingService extends Service implements SensorListener<HrSensorE
 
         // We got here because the user decided to remove location updates from the notification.
         if (startedFromNotification) {
-            removeLocationUpdates();
+            stopTracking();
             stopSelf();
         }
+
+        if(mActualSegment == null) {
+            mActualSegment = mStore.track().addSegment();
+            mActualSegment.start();
+        }
+        busPost(new TrackingStateEvent(TrackingStateEvent.Action.START));
+
         // Tells the system to not try to recreate the service after it has been killed.
         return START_NOT_STICKY;
+    }
+
+    private void busPost(Object event) {
+        RxBus.getInstance().post(event);
     }
 
     @Override
@@ -217,7 +227,7 @@ public class TrackingService extends Service implements SensorListener<HrSensorE
      * Makes a request for location updates. Note that in this sample we merely log the
      * {@link SecurityException}.
      */
-    public void requestLocationUpdates() {
+    public void startTracking() {
         Log.i(TAG, "Requesting location updates");
         Utils.setRequestingLocationUpdates(this, true);
         startService(new Intent(getApplicationContext(), TrackingService.class));
@@ -230,6 +240,7 @@ public class TrackingService extends Service implements SensorListener<HrSensorE
 //            mHrProvider = new BluetoothHrSensorProvider("40:00:00:00:11:C0");
             mHrProvider = new InternalHrSensorProvider();
             mHrProvider.register(this, this);
+
         } catch (SecurityException unlikely) {
             Utils.setRequestingLocationUpdates(this, false);
             Log.e(TAG, "Lost location permission. Could not request updates. " + unlikely);
@@ -240,19 +251,24 @@ public class TrackingService extends Service implements SensorListener<HrSensorE
      * Removes location updates. Note that in this sample we merely log the
      * {@link SecurityException}.
      */
-    public void removeLocationUpdates() {
+    public void stopTracking() {
         Log.i(TAG, "Removing location updates");
         try {
+            mActualSegment.stop();
             mFusedLocationClient.removeLocationUpdates(mLocationCallback);
-            mSubscription.unsubscribe();
             mUpdating.set(false);
             mHrProvider.unregister();
             Utils.setRequestingLocationUpdates(this, false);
+            busPost(new TrackingStateEvent(TrackingStateEvent.Action.STOP));
             stopSelf();
         } catch (SecurityException unlikely) {
             Utils.setRequestingLocationUpdates(this, true);
             Log.e(TAG, "Lost location permission. Could not remove updates. " + unlikely);
         }
+    }
+
+    public Track finishTracking(){
+       return mStore.finish();
     }
 
     public boolean isUpdating() {
@@ -292,30 +308,12 @@ public class TrackingService extends Service implements SensorListener<HrSensorE
                 .setWhen(System.currentTimeMillis()).build();
     }
 
-    private void getLastLocation() {
-        try {
-            mFusedLocationClient.getLastLocation()
-                    .addOnCompleteListener(new OnCompleteListener<Location>() {
-                        @Override
-                        public void onComplete(@NonNull Task<Location> task) {
-                            if (task.isSuccessful() && task.getResult() != null) {
-                                mLocation = task.getResult();
-                            } else {
-                                Log.w(TAG, "Failed to get location.");
-                            }
-                        }
-                    });
-        } catch (SecurityException unlikely) {
-            Log.e(TAG, "Lost location permission." + unlikely);
-        }
-    }
-
     private void onNewLocation(Location location) {
         Log.i(TAG, "New location: " + location);
 
         mLocation = location;
-
-        RxBus.getInstance().post(new TrackingLocationEvent(location));
+        mActualSegment.add(location, mLastHr);
+        RxBus.getInstance().post(new TrackingLocationEvent(mActualSegment.getDistance(), new Tempo(location.getSpeed())));
 
         // Update notification content if running as a foreground service.
         if (serviceIsRunningInForeground(this)) {
@@ -334,12 +332,17 @@ public class TrackingService extends Service implements SensorListener<HrSensorE
     }
 
     @Override
-    public void notify(HrSensorEvent event) {
+    public void onSensorEvent(HrSensorEvent event) {
         switch (event.getType()) {
             case DATA:
+                this.mLastHr = event.getHeartRate();
                 RxBus.getInstance().post(new TrackingHrEvent(event.getHeartRate()));
                 break;
         }
+    }
+
+    public Duration getElapsedTime() {
+        return mStore.getElapsedTime();
     }
 
     /**

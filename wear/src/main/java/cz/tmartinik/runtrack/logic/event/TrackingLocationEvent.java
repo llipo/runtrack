@@ -1,20 +1,26 @@
 package cz.tmartinik.runtrack.logic.event;
 
-import android.location.Location;
+import cz.tmartinik.runtrack.model.Tempo;
 
 /**
  * Created by tmartinik on 19.9.2017.
  */
 
 public class TrackingLocationEvent implements TrackingEvent {
-    private Location location;
 
-    public TrackingLocationEvent(Location location) {
-        this.location = location;
+    private Double distance;
+    private Tempo tempo;
+
+    public TrackingLocationEvent(Double distance, Tempo tempo) {
+        this.distance = distance;
+        this.tempo = tempo;
     }
 
-    public Location getLocation() {
+    public Double getDistance() {
+        return distance;
+    }
 
-        return location;
+    public Tempo getTempo() {
+        return tempo;
     }
 }

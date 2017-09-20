@@ -47,5 +47,8 @@ dependencies {
     compile 'com.jakewharton:butterknife:8.8.1'
     annotationProcessor 'com.jakewharton:butterknife-compiler:8.8.1'
 
+    //Joda time
+    compile 'net.danlew:android.joda:2.9.9'
+
 
 }

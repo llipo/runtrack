@@ -24,34 +24,53 @@ public class TrackingServiceFragment extends Fragment {
 
     private TrackingService mService;
     private ServiceConnection mServiceConnection;
+    private boolean mBound;
 
     private List<Subscription> mRegistrations = new ArrayList<>();
 
     @Override
-    public void onAttach(Context context) {
-        super.onAttach(context);
+    public void onStart() {
+        super.onStart();
+        bindService();
+    }
+
+    @Override
+    public void onStop() {
+        super.onStop();
+        unBindService();
+    }
+
+    protected void onServiceConnected(TrackingService service){
+    }
+
+    protected void onServiceDisconnected(){
+    }
+
+    private void bindService() {
         mServiceConnection = new ServiceConnection() {
             @Override
             public void onServiceConnected(ComponentName componentName, IBinder service) {
                 Log.d(StartFragment.TAG, "Service connected");
                 TrackingService.LocalBinder binder = (TrackingService.LocalBinder) service;
                 mService = binder.getService();
+                TrackingServiceFragment.this.onServiceConnected(mService);
             }
 
             @Override
             public void onServiceDisconnected(ComponentName componentName) {
                 mService = null;
+                TrackingServiceFragment.this.onServiceDisconnected();
             }
         };
-        getContext().bindService(new Intent(getActivity(), TrackingService.class), mServiceConnection,
+        mBound = getActivity().bindService(new Intent(getActivity(), TrackingService.class), mServiceConnection,
                 Context.BIND_AUTO_CREATE);
-
     }
 
-    @Override
-    public void onDetach() {
-        super.onDetach();
-        mService.unbindService(mServiceConnection);
+    private void unBindService() {
+        if(mBound) {
+            getActivity().unbindService(mServiceConnection);
+            mBound = false;
+        }
     }
 
     @Override

@@ -5,50 +5,38 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
-import android.content.pm.PackageManager;
 import android.hardware.Sensor;
-import android.hardware.SensorEvent;
 import android.hardware.SensorEventCallback;
 import android.hardware.SensorManager;
 import android.os.Bundle;
 import android.os.IBinder;
-import android.support.wear.widget.BoxInsetLayout;
 import android.support.wearable.activity.WearableActivity;
 import android.util.Log;
 import android.view.View;
-import android.widget.TextView;
 
 import com.tbruyelle.rxpermissions.RxPermissions;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
 import cz.tmartinik.runtrack.logic.bus.RxBus;
-import cz.tmartinik.runtrack.logic.event.TrackingEvent;
-import cz.tmartinik.runtrack.logic.event.TrackingHrEvent;
 import cz.tmartinik.runtrack.logic.event.TrackingStateEvent;
 import cz.tmartinik.runtrack.ui.StartFragment;
+import cz.tmartinik.runtrack.ui.TrackingFragment;
 import rx.Subscription;
 import rx.functions.Action1;
 
-public class MainActivity extends WearableActivity implements StartFragment.OnFragmentInteractionListener {
+public class MainActivity extends WearableActivity {
 
     private static final SimpleDateFormat AMBIENT_DATE_FORMAT =
             new SimpleDateFormat("HH:mm:ss", Locale.US);
     private static final String TAG = "BLE";
 
-    private BoxInsetLayout mContainerView;
-    private View container;
-    private TextView mTextView;
-    private TextView mClockView;
-    private TextView mDistanceView;
-    private TextView mHrView;
+    private View mContainerView;
     private boolean mUpdating = false;
     public boolean mGranted = false;
-    public boolean connected = false;
 
     // A reference to the service used to get location updates.
     private TrackingService mService = null;
@@ -68,6 +56,7 @@ public class MainActivity extends WearableActivity implements StartFragment.OnFr
             if (mUpdating) {
                 Log.d(TAG, "Service updating");
                 //TODO: show normal UI
+                getFragmentManager().beginTransaction().replace(R.id.container, new TrackingFragment(), "tracking").commit();
             } else {
                 Log.d(TAG, "Service not updating");
                 //TODO:
@@ -93,12 +82,7 @@ public class MainActivity extends WearableActivity implements StartFragment.OnFr
         setContentView(R.layout.activity_main);
         setAmbientEnabled();
 
-        mContainerView = (BoxInsetLayout) findViewById(R.id.container);
-        mTextView = (TextView) findViewById(R.id.text);
-        mClockView = (TextView) findViewById(R.id.clock);
-        mDistanceView = (TextView) findViewById(R.id.distance);
-        mHrView = (TextView) findViewById(R.id.hr);
-
+        mContainerView = findViewById(R.id.container);
         RxPermissions rxPermissions = new RxPermissions(MainActivity.this);
         rxPermissions
                 .request(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.BODY_SENSORS, Manifest.permission.BLUETOOTH)
@@ -110,7 +94,7 @@ public class MainActivity extends WearableActivity implements StartFragment.OnFr
                         if (granted) {
                             mGranted = granted;
                         } else {
-                            mClockView.setText("Permissions missing");
+                            //TODO: Show error
                         }
                     }
                 });
@@ -125,39 +109,36 @@ public class MainActivity extends WearableActivity implements StartFragment.OnFr
         }
     }
 
-    private void registerStepsSensor() {
-        if (getPackageManager().hasSystemFeature(PackageManager.FEATURE_SENSOR_STEP_COUNTER)) {
-            mSensorManager = ((SensorManager) getSystemService(SENSOR_SERVICE));
-            mStepDetectorSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER);
-            mStepListener = new SensorEventCallback() {
-                @Override
-                public void onSensorChanged(SensorEvent event) {
-                    if (event.sensor.getType() == Sensor.TYPE_STEP_COUNTER) {
-                        if (mSteps == -1) {
-                            mSteps = -(int) event.values[0];
-                        }
-                        mSteps += event.values[0];
-                        String msg = "" + mSteps;
-                        mTextView.setText(msg);
-                        Log.d("Steps", msg);
-                    } else
-                        Log.d(TAG, "Unknown sensor type");
-                }
-            };
-            mSensorManager.registerListener(mStepListener, mStepDetectorSensor, mSensorManager.SENSOR_DELAY_FASTEST);
-        } else {
-            Log.d(TAG, "No steps detector");
-        }
-    }
+//    private void registerStepsSensor() {
+//        if (getPackageManager().hasSystemFeature(PackageManager.FEATURE_SENSOR_STEP_COUNTER)) {
+//            mSensorManager = ((SensorManager) getSystemService(SENSOR_SERVICE));
+//            mStepDetectorSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER);
+//            mStepListener = new SensorEventCallback() {
+//                @Override
+//                public void onSensorChanged(SensorEvent event) {
+//                    if (event.sensor.getType() == Sensor.TYPE_STEP_COUNTER) {
+//                        if (mSteps == -1) {
+//                            mSteps = -(int) event.values[0];
+//                        }
+//                        mSteps += event.values[0];
+//                        String msg = "" + mSteps;
+//                        mTextView.setText(msg);
+//                        Log.d("Steps", msg);
+//                    } else
+//                        Log.d(TAG, "Unknown sensor type");
+//                }
+//            };
+//            mSensorManager.registerListener(mStepListener, mStepDetectorSensor, mSensorManager.SENSOR_DELAY_FASTEST);
+//        } else {
+//            Log.d(TAG, "No steps detector");
+//        }
+//    }
 
 
     @Override
     protected void onResume() {
         super.onResume();
-        register(TrackingEvent.class, event -> {
-            MainActivity.this.runOnUiThread(() -> handleTrackingEvent(event));
-        });
-        register(TrackingHrEvent.class, event -> {
+        register(TrackingStateEvent.class, event -> {
             MainActivity.this.runOnUiThread(() -> handleTrackingEvent(event));
         });
     }
@@ -166,23 +147,19 @@ public class MainActivity extends WearableActivity implements StartFragment.OnFr
         mRegistrations.add(RxBus.getInstance().register(eventClass, eventAction));
     }
 
-    private void handleTrackingEvent(TrackingEvent event) {
-        if(event instanceof TrackingStateEvent) {
-            switch (((TrackingStateEvent) event).getAction()) {
-                case START:
-                    break;
-                case STOP:
-            }
-        }else if(event instanceof TrackingHrEvent){
-            mHrView.setText(((TrackingHrEvent) event).getHr());
+    private void handleTrackingEvent(TrackingStateEvent event) {
+        switch (event.getAction()) {
+            case START:
+                getFragmentManager().beginTransaction().replace(R.id.container, new TrackingFragment(), "tracking").commit();
+                break;
+            case STOP:
         }
-        //TODO handle tracking events
     }
 
     @Override
     protected void onPause() {
         super.onPause();
-        for(Subscription s : mRegistrations) {
+        for (Subscription s : mRegistrations) {
             s.unsubscribe();
         }
     }
@@ -215,20 +192,10 @@ public class MainActivity extends WearableActivity implements StartFragment.OnFr
         if (mUpdating) {
             if (isAmbient()) {
                 mContainerView.setBackgroundColor(getResources().getColor(android.R.color.black));
-                mTextView.setTextColor(getResources().getColor(android.R.color.white));
-                mClockView.setVisibility(View.VISIBLE);
-
-                mClockView.setText(AMBIENT_DATE_FORMAT.format(new Date()));
+                //TODO: Delegate to fragments
             } else {
                 mContainerView.setBackground(null);
-                mTextView.setTextColor(getResources().getColor(android.R.color.black));
-                mClockView.setVisibility(View.GONE);
             }
         }
-    }
-
-    @Override
-    public void onTrackingStarted() {
-
     }
 }

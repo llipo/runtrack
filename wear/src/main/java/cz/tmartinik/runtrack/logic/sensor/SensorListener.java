@@ -6,5 +6,5 @@ package cz.tmartinik.runtrack.logic.sensor;
 
 public interface SensorListener<T extends SensorEvent> {
 
-    public void notify(T event);
+    public void onSensorEvent(T event);
 }
