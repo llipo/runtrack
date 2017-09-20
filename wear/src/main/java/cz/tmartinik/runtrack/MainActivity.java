@@ -21,7 +21,9 @@ import android.widget.TextView;
 import com.tbruyelle.rxpermissions.RxPermissions;
 
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 import java.util.Locale;
 
 import cz.tmartinik.runtrack.logic.bus.RxBus;
@@ -83,7 +85,7 @@ public class MainActivity extends WearableActivity implements StartFragment.OnFr
     private SensorEventCallback mStepListener;
     private int mSteps = -1;
     private SensorManager mSensorManager;
-    private Subscription mReg;
+    private List<Subscription> mRegistrations = new ArrayList<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -152,12 +154,16 @@ public class MainActivity extends WearableActivity implements StartFragment.OnFr
     @Override
     protected void onResume() {
         super.onResume();
-        mReg = RxBus.getInstance().register(TrackingEvent.class, event -> {
+        register(TrackingEvent.class, event -> {
             MainActivity.this.runOnUiThread(() -> handleTrackingEvent(event));
         });
-        RxBus.getInstance().register(TrackingHrEvent.class, event -> {
+        register(TrackingHrEvent.class, event -> {
             MainActivity.this.runOnUiThread(() -> handleTrackingEvent(event));
         });
+    }
+
+    public <T> void register(Class<T> eventClass, Action1<T> eventAction) {
+        mRegistrations.add(RxBus.getInstance().register(eventClass, eventAction));
     }
 
     private void handleTrackingEvent(TrackingEvent event) {
@@ -176,7 +182,9 @@ public class MainActivity extends WearableActivity implements StartFragment.OnFr
     @Override
     protected void onPause() {
         super.onPause();
-        mReg.unsubscribe();
+        for(Subscription s : mRegistrations) {
+            s.unsubscribe();
+        }
     }
 
     @Override

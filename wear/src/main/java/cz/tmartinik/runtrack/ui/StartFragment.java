@@ -16,6 +16,9 @@ import butterknife.ButterKnife;
 import butterknife.OnClick;
 import cz.tmartinik.runtrack.R;
 import cz.tmartinik.runtrack.TrackingService;
+import cz.tmartinik.runtrack.logic.event.TrackingEvent;
+import rx.Subscription;
+import rx.functions.Action1;
 
 /**
  * A simple {@link Fragment} subclass.
@@ -25,12 +28,10 @@ import cz.tmartinik.runtrack.TrackingService;
  * Use the {@link StartFragment#newInstance} factory method to
  * create an instance of this fragment.
  */
-public class StartFragment extends Fragment {
+public class StartFragment extends TrackingServiceFragment {
 
     public static final String TAG = StartFragment.class.getSimpleName();
     private OnFragmentInteractionListener mListener;
-    private TrackingService mService;
-    private ServiceConnection mServiceConnection;
 
     public StartFragment() {
         // Required empty public constructor
@@ -45,6 +46,23 @@ public class StartFragment extends Fragment {
     public static StartFragment newInstance() {
         StartFragment fragment = new StartFragment();
         return fragment;
+    }
+
+    @Override
+    public void onAttach(Context context) {
+        super.onAttach(context);
+        if (context instanceof StartFragment.OnFragmentInteractionListener) {
+            mListener = (StartFragment.OnFragmentInteractionListener) context;
+        } else {
+            throw new RuntimeException(context.toString()
+                    + " must implement OnFragmentInteractionListener");
+        }
+    }
+
+    @Override
+    public void onDetach() {
+        super.onDetach();
+        mListener = null;
     }
 
     @Override
@@ -64,41 +82,7 @@ public class StartFragment extends Fragment {
     @OnClick(R.id.btn_start)
     public void onButtonPressed() {
         //TODO: Handle settings - HR monitor, activity type, etc
-        mService.requestLocationUpdates();
-    }
-
-    @Override
-    public void onAttach(Context context) {
-        super.onAttach(context);
-        if (context instanceof OnFragmentInteractionListener) {
-            mListener = (OnFragmentInteractionListener) context;
-        } else {
-            throw new RuntimeException(context.toString()
-                    + " must implement OnFragmentInteractionListener");
-        }
-        mServiceConnection = new ServiceConnection() {
-            @Override
-            public void onServiceConnected(ComponentName componentName, IBinder service) {
-                Log.d(TAG, "Service connected");
-                TrackingService.LocalBinder binder = (TrackingService.LocalBinder) service;
-                mService = binder.getService();
-            }
-
-            @Override
-            public void onServiceDisconnected(ComponentName componentName) {
-                mService = null;
-            }
-        };
-        getContext().bindService(new Intent(getActivity(), TrackingService.class), mServiceConnection,
-                Context.BIND_AUTO_CREATE);
-
-    }
-
-    @Override
-    public void onDetach() {
-        super.onDetach();
-        mListener = null;
-        mService.unbindService(mServiceConnection);
+        getService().requestLocationUpdates();
     }
 
     /**
