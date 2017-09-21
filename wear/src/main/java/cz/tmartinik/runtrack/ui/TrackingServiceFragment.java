@@ -7,6 +7,7 @@ import android.content.Intent;
 import android.content.ServiceConnection;
 import android.os.IBinder;
 import android.util.Log;
+import android.view.MenuItem;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -20,7 +21,7 @@ import rx.functions.Action1;
  * Created by Tom on 20. 9. 2017.
  */
 
-public class TrackingServiceFragment extends Fragment {
+public class TrackingServiceFragment extends Fragment implements MenuItem.OnMenuItemClickListener {
 
     private TrackingService mService;
     private ServiceConnection mServiceConnection;
@@ -41,6 +42,10 @@ public class TrackingServiceFragment extends Fragment {
     }
 
     protected void onServiceConnected(TrackingService service){
+    }
+
+    public int getMenuResource(){
+        return 0;
     }
 
     protected void onServiceDisconnected(){
@@ -85,5 +90,10 @@ public class TrackingServiceFragment extends Fragment {
 
     public <T> void register(Class<T> eventClass, Action1<T> eventAction) {
         mRegistrations.add(RxBus.getInstance().register(eventClass, eventAction));
+    }
+
+    @Override
+    public boolean onMenuItemClick(MenuItem menuItem) {
+        return false;
     }
 }

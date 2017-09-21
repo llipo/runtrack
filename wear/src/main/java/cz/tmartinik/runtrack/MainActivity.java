@@ -1,6 +1,7 @@
 package cz.tmartinik.runtrack;
 
 import android.Manifest;
+import android.app.Fragment;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
@@ -10,33 +11,42 @@ import android.hardware.SensorEventCallback;
 import android.hardware.SensorManager;
 import android.os.Bundle;
 import android.os.IBinder;
+import android.support.wear.widget.drawer.WearableActionDrawerView;
+import android.support.wear.widget.drawer.WearableNavigationDrawerView;
 import android.support.wearable.activity.WearableActivity;
 import android.util.Log;
+import android.view.Menu;
+import android.view.MenuItem;
+import android.view.MotionEvent;
 import android.view.View;
 
 import com.tbruyelle.rxpermissions.RxPermissions;
 
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 
+import butterknife.BindView;
+import butterknife.ButterKnife;
 import cz.tmartinik.runtrack.logic.bus.RxBus;
 import cz.tmartinik.runtrack.logic.event.TrackingStateEvent;
 import cz.tmartinik.runtrack.ui.StartFragment;
 import cz.tmartinik.runtrack.ui.TrackingFragment;
+import cz.tmartinik.runtrack.ui.TrackingServiceFragment;
 import rx.Subscription;
 import rx.functions.Action1;
 
-public class MainActivity extends WearableActivity {
+public class MainActivity extends WearableActivity implements
+        MenuItem.OnMenuItemClickListener, WearableNavigationDrawerView.OnItemSelectedListener {
 
-    private static final SimpleDateFormat AMBIENT_DATE_FORMAT =
-            new SimpleDateFormat("HH:mm:ss", Locale.US);
-    private static final String TAG = "BLE";
+    private static final String TAG = MainActivity.class.getSimpleName();
 
-    private View mContainerView;
+    @BindView(R.id.container) View mContainerView;
+    @BindView(R.id.bottom_action_drawer) WearableActionDrawerView mActionDrawer;
+
+
     private boolean mUpdating = false;
     public boolean mGranted = false;
+
 
     // A reference to the service used to get location updates.
     private TrackingService mService = null;
@@ -54,14 +64,15 @@ public class MainActivity extends WearableActivity {
             mBound = true;
             mUpdating = mService.isUpdating();
             if (mUpdating) {
+                //tracking in progress
                 Log.d(TAG, "Service updating");
-                //TODO: show normal UI
-                getFragmentManager().beginTransaction().replace(R.id.container, new TrackingFragment(), "tracking").commit();
+                switchFragment(new TrackingFragment(), "tracking");
             } else {
+                //Show start
                 Log.d(TAG, "Service not updating");
-                //TODO:
-                getFragmentManager().beginTransaction().replace(R.id.container, new StartFragment(), "start").commit();
+                switchFragment(new StartFragment(), "start");
             }
+            //TODO: paused
         }
 
         @Override
@@ -70,6 +81,39 @@ public class MainActivity extends WearableActivity {
             mBound = false;
         }
     };
+
+    private void switchFragment(Fragment fragment, String tag) {
+        getFragmentManager().beginTransaction().replace(R.id.container, fragment, tag).commit();
+        if (fragment instanceof TrackingServiceFragment) {
+            prepareActionMenu((TrackingServiceFragment) fragment);
+        }
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        switch (event.getAction() ) {
+            case (MotionEvent.ACTION_DOWN):
+                Log.d(TAG, "Action was DOWN");
+                mActionDrawer.getController().peekDrawer();
+                return true;
+        }
+        return super.onTouchEvent(event);
+    }
+
+    private void prepareActionMenu(TrackingServiceFragment fragment) {
+        TrackingServiceFragment menuFragment = fragment;
+        if (menuFragment.getMenuResource() != 0) {
+            Menu menu = mActionDrawer.getMenu();
+            getMenuInflater().inflate(menuFragment.getMenuResource(), menu);
+            mActionDrawer.getController().peekDrawer();
+            mActionDrawer.setIsLocked(false);
+            mActionDrawer.setOnMenuItemClickListener(menuFragment);
+
+        }else{
+            mActionDrawer.setLockedWhenClosed(true);
+        }
+    }
+
     private Sensor mStepDetectorSensor;
     private SensorEventCallback mStepListener;
     private int mSteps = -1;
@@ -82,7 +126,13 @@ public class MainActivity extends WearableActivity {
         setContentView(R.layout.activity_main);
         setAmbientEnabled();
 
-        mContainerView = findViewById(R.id.container);
+        ButterKnife.bind(this);
+        requestPermissions();
+
+
+    }
+
+    private void requestPermissions() {
         RxPermissions rxPermissions = new RxPermissions(MainActivity.this);
         rxPermissions
                 .request(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.BODY_SENSORS, Manifest.permission.BLUETOOTH)
@@ -109,37 +159,11 @@ public class MainActivity extends WearableActivity {
         }
     }
 
-//    private void registerStepsSensor() {
-//        if (getPackageManager().hasSystemFeature(PackageManager.FEATURE_SENSOR_STEP_COUNTER)) {
-//            mSensorManager = ((SensorManager) getSystemService(SENSOR_SERVICE));
-//            mStepDetectorSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER);
-//            mStepListener = new SensorEventCallback() {
-//                @Override
-//                public void onSensorChanged(SensorEvent event) {
-//                    if (event.sensor.getType() == Sensor.TYPE_STEP_COUNTER) {
-//                        if (mSteps == -1) {
-//                            mSteps = -(int) event.values[0];
-//                        }
-//                        mSteps += event.values[0];
-//                        String msg = "" + mSteps;
-//                        mTextView.setText(msg);
-//                        Log.d("Steps", msg);
-//                    } else
-//                        Log.d(TAG, "Unknown sensor type");
-//                }
-//            };
-//            mSensorManager.registerListener(mStepListener, mStepDetectorSensor, mSensorManager.SENSOR_DELAY_FASTEST);
-//        } else {
-//            Log.d(TAG, "No steps detector");
-//        }
-//    }
-
-
     @Override
     protected void onResume() {
         super.onResume();
         register(TrackingStateEvent.class, event -> {
-            MainActivity.this.runOnUiThread(() -> handleTrackingEvent(event));
+            handleTrackingEvent(event);
         });
     }
 
@@ -150,7 +174,7 @@ public class MainActivity extends WearableActivity {
     private void handleTrackingEvent(TrackingStateEvent event) {
         switch (event.getAction()) {
             case START:
-                getFragmentManager().beginTransaction().replace(R.id.container, new TrackingFragment(), "tracking").commit();
+                switchFragment(new TrackingFragment(), "tracking");
                 break;
             case STOP:
         }
@@ -159,9 +183,7 @@ public class MainActivity extends WearableActivity {
     @Override
     protected void onPause() {
         super.onPause();
-        for (Subscription s : mRegistrations) {
-            s.unsubscribe();
-        }
+        mRegistrations.forEach(Subscription::unsubscribe);
     }
 
     @Override
@@ -197,5 +219,15 @@ public class MainActivity extends WearableActivity {
                 mContainerView.setBackground(null);
             }
         }
+    }
+
+    @Override
+    public void onItemSelected(int pos) {
+
+    }
+
+    @Override
+    public boolean onMenuItemClick(MenuItem menuItem) {
+        return false;
     }
 }

@@ -1,58 +1,72 @@
-<android.support.wear.widget.BoxInsetLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    tools:context="cz.tmartinik.runtrack.ui.TrackingFragment">
+    android:layout_height="match_parent">
 
-    <RelativeLayout
-        app:boxedEdges="all"
+    <android.support.wear.widget.CircularProgressLayout
+        android:id="@+id/circular_progress"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:padding="5dp"
-        >
+        android:padding="4dp"
+        app:colorSchemeColors="@color/red"
+        app:strokeWidth="8dp">
+    </android.support.wear.widget.CircularProgressLayout>
 
-        <TextView
-            android:id="@+id/tempo"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:gravity="top|center"
-            android:text="@string/hello_world"
-            android:layout_alignParentEnd="true"
-            android:layout_alignParentTop="true"
-            app:layout_box="right" />
+    <android.support.wear.widget.BoxInsetLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        tools:context="cz.tmartinik.runtrack.ui.TrackingFragment">
 
-        <TextView
-            android:id="@+id/distance"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_alignParentLeft="true"
-            android:layout_alignParentTop="true"
-            android:text="6.3Km"
-            app:layout_box="all" />
-
-        <Chronometer
-            android:id="@+id/clock"
+        <RelativeLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:gravity="center"
-            android:paddingTop="10dp"
-            android:text="00:05:36"
-            android:layout_below="@id/distance"
-            android:textSize="30dp"
-            android:textColor="@android:color/black"
-            app:layout_box="all" />
+            android:layout_height="match_parent"
+            android:padding="5dp"
+            app:boxedEdges="all">
 
-        <TextView
-            android:id="@+id/hr"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="180 Bpm"
-            android:layout_alignParentBottom="true"
-            android:gravity="center_horizontal"
-            app:layout_box="all" />
-    </RelativeLayout>
+            <TextView
+                android:id="@+id/tempo"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignParentEnd="true"
+                android:layout_alignParentTop="true"
+                android:gravity="top|center"
+                android:text="@string/hello_world"
+                app:layout_box="right" />
+
+            <TextView
+                android:id="@+id/distance"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignParentLeft="true"
+                android:layout_alignParentTop="true"
+                android:text="6.3Km"
+                app:layout_box="all" />
+
+            <Chronometer
+                android:id="@+id/clock"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_below="@id/distance"
+                android:layout_gravity="center"
+                android:gravity="center"
+                android:paddingBottom="10dp"
+                android:paddingTop="20dp"
+                android:text="00:05:36"
+                android:textColor="@android:color/black"
+                android:textSize="30dp"
+                app:layout_box="all" />
+
+            <TextView
+                android:id="@+id/hr"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_alignParentBottom="true"
+                android:gravity="center_horizontal"
+                android:text="180 Bpm"
+                app:layout_box="all" />
+        </RelativeLayout>
 
 
-</android.support.wear.widget.BoxInsetLayout>
+    </android.support.wear.widget.BoxInsetLayout>
+</FrameLayout>

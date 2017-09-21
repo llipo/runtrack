@@ -4,6 +4,7 @@ import android.app.Fragment;
 import android.os.Bundle;
 import android.os.SystemClock;
 import android.view.LayoutInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Chronometer;
@@ -90,7 +91,7 @@ public class TrackingFragment extends TrackingServiceFragment {
             mHrView.setText(event.getHr() + " Bmp");
         });
         register(TrackingLocationEvent.class, event -> {
-            mDistanceView.setText(decimal(event.getDistance()/1000));
+            mDistanceView.setText(decimal(event.getDistance() / 1000));
             Optional.ofNullable(event.getTempo()).
                     ifPresent(t -> {
                                 mTempoView.setText(decimal(t.getMinKm()));
@@ -103,5 +104,20 @@ public class TrackingFragment extends TrackingServiceFragment {
     protected void onServiceConnected(TrackingService service) {
         mClockView.setBase(SystemClock.elapsedRealtime() - service.getElapsedTime().getMillis());
         mClockView.start();
+    }
+
+    @Override
+    public int getMenuResource() {
+        return R.menu.tracking;
+    }
+
+    @Override
+    public boolean onMenuItemClick(MenuItem menuItem) {
+        switch (menuItem.getItemId()) {
+            case R.id.menu_tracking_pause:
+                getService().stopTracking();
+                break;
+        }
+        return true;
     }
 }

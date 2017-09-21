@@ -3,6 +3,7 @@ package cz.tmartinik.runtrack.ui;
 import android.app.Fragment;
 import android.os.Bundle;
 import android.view.LayoutInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 
@@ -52,5 +53,20 @@ public class StartFragment extends TrackingServiceFragment {
     public void onButtonPressed() {
         //TODO: Handle settings - HR monitor, activity type, etc
         getService().startTracking();
+    }
+
+    @Override
+    public int getMenuResource() {
+        return R.menu.start;
+    }
+
+    @Override
+    public boolean onMenuItemClick(MenuItem menuItem) {
+        switch (menuItem.getItemId()) {
+            case R.id.menu_start_run:
+                //TODO: Set type to start
+                break;
+        }
+        return true;
     }
 }
