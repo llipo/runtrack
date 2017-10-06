@@ -1,31 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--<?xml version="1.0" encoding="utf-8"?>-->
-    <!--<shape xmlns:android="http://schemas.android.com/apk/res/android"-->
-        <!--android:shape="ring" android:thickness="0dp">-->
-        <!--<stroke-->
-            <!--android:width="10dp"-->
-            <!--android:color="#78d9ff" />-->
-    <!--</shape>-->
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:id="@android:id/background">
-        <shape
-            android:shape="ring"
-            android:thickness="30dp"
-            android:innerRadius="50dp"
-            android:useLevel="false">
-            <solid android:color="#333" />
-        </shape>
-    </item>
-    <item android:id="@android:id/progress">
-        <rotate
-            android:fromDegrees="-90"
-            android:toDegrees="90">
-            <shape
-                android:shape="ring"
-                android:thickness="10dp"
-                android:innerRadius="54dp">
-                <solid android:color="#0099FF" />
-            </shape>
-        </rotate>
-    </item>
-</layer-list>
+<rotate
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:fromDegrees="90"
+    android:toDegrees="90">
+
+    <shape
+        android:shape="ring"
+        android:thickness="10dp"
+        android:useLevel="true"><!-- this line fixes the issue for lollipop api 21 -->
+
+        <solid android:color="@color/red"/>
+
+    </shape>
+</rotate>

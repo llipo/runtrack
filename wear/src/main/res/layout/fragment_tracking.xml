@@ -4,14 +4,14 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <android.support.wear.widget.CircularProgressLayout
-        android:id="@+id/circular_progress"
+    <ProgressBar
+        style="?android:attr/progressBarStyleHorizontal"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:padding="4dp"
-        app:colorSchemeColors="@color/red"
-        app:strokeWidth="8dp">
-    </android.support.wear.widget.CircularProgressLayout>
+        android:indeterminate="false"
+        android:max="100"
+        android:progress="67"
+        android:progressDrawable="@drawable/circle_rest" />
 
     <android.support.wear.widget.BoxInsetLayout
         android:layout_width="match_parent"
@@ -62,11 +62,10 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_alignParentBottom="true"
+                android:layout_alignParentStart="true"
                 android:gravity="center_horizontal"
                 android:text="180 Bpm"
                 app:layout_box="all" />
         </RelativeLayout>
-
-
     </android.support.wear.widget.BoxInsetLayout>
 </FrameLayout>
