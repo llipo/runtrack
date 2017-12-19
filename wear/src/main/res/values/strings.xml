@@ -9,4 +9,6 @@
     <string name="run">Run</string>
     <string name="ride">Ride</string>
     <string name="kayak">Kayak</string>
+    <string name="bmp">bmp</string>
+    <string name="speed">min/km</string>
 </resources>

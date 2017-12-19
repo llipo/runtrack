@@ -7,28 +7,54 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <cz.tmartinik.runtrack.ui.FitDoughnut
-        android:layout_gravity="center"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        >
-
-    </cz.tmartinik.runtrack.ui.FitDoughnut>
-
     <android.support.wear.widget.BoxInsetLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         >
 
-    <TextView
-        android:id="@+id/hr_hr"
-        android:layout_width="wrap_content"
+        <RelativeLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_gravity="top|center_horizontal"
-        android:textColor="@color/white"
-        android:textSize="20sp"
-        app:boxedEdges="all"
-        tools:text="56" />
+        android:paddingTop="15dp"
+            android:layout_gravity="top|center_horizontal"
+        >
+
+        <ImageView
+            android:id="@+id/hr_type"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:src="@drawable/ic_run_white"
+            android:layout_centerHorizontal="true"
+            android:layout_gravity="center_horizontal"
+            android:layout_alignParentTop="true"/>
+
+        <TextView
+            android:id="@+id/hr_distance"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingTop="10dp"
+            android:layout_below="@id/hr_type"
+            android:layout_centerHorizontal="true"
+            android:textColor="@color/white"
+            android:textSize="25sp"
+            android:text="5.84"
+            tools:text="5.84" />
+
+            <TextView
+                android:id="@+id/hr_distance_unit"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_toEndOf="@id/hr_distance"
+                android:layout_alignBaseline="@id/hr_distance"
+                android:layout_marginLeft="2dp"
+                android:textColor="@color/yellow"
+                android:textSize="8sp"
+                android:text="Km"
+                tools:text="Km" />
+    </RelativeLayout>
+
+
+
 
         <TextView
             android:id="@+id/hr_time"
@@ -37,7 +63,6 @@
             android:layout_gravity="center"
             android:textColor="@color/white"
             android:textSize="40sp"
-            app:boxedEdges="all"
             tools:text="00:00:21"
             android:text="00:00:21"/>
 
@@ -45,26 +70,45 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_gravity="bottom"
-            app:boxedEdges="bottom"
-            android:paddingBottom="10dp"
+            android:layout_marginBottom="20dp"
             android:orientation="horizontal">
 
             <RelativeLayout
                 android:layout_width="0dp"
                 android:layout_weight="1"
                 android:paddingRight="5dp"
+                android:layout_marginRight="5dp"
+                android:background="@color/background_grey"
                 android:layout_height="wrap_content">
 
                 <TextView
-                    android:id="@+id/hr_energy"
+                    android:id="@+id/hr_hr"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_gravity="center"
                     android:layout_alignParentRight="true"
                     android:textColor="@color/white"
-                    android:textSize="20sp"
-                    tools:text="275"
-                    android:text="275"/>
+                    android:textSize="25sp"
+                    tools:text="132"
+                    android:text="132"/>
+
+                <ImageView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:src="@drawable/ic_heart_white"
+                    android:layout_toLeftOf="@id/hr_hr"
+                    />
+
+                <TextView
+                    android:id="@+id/hr_hr_unit"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_below="@id/hr_hr"
+                    android:textColor="@color/yellow"
+                    android:layout_alignParentRight="true"
+                    android:textSize="8sp"
+                    android:text="@string/bmp"
+                     />
 
             </RelativeLayout>
 
@@ -72,6 +116,8 @@
                 android:layout_width="0dp"
                 android:layout_weight="1"
                 android:paddingLeft="5dp"
+                android:layout_marginLeft="5dp"
+                android:background="@color/background_grey"
                 android:layout_height="wrap_content">
 
                 <TextView
@@ -80,9 +126,26 @@
                     android:layout_height="wrap_content"
                     android:layout_alignParentLeft="true"
                     android:textColor="@color/white"
-                    android:textSize="20sp"
+                    android:textSize="25sp"
                     tools:text="8:07"
                     android:text="8:07"/>
+
+                <ImageView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:src="@drawable/ic_speed_white"
+                    android:layout_toRightOf="@id/hr_speed"
+                    />
+
+                <TextView
+                    android:id="@+id/hr_hr_speed"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_below="@id/hr_speed"
+                    android:textColor="@color/yellow"
+                    android:textSize="8sp"
+                    android:text="@string/speed"
+                    />
 
             </RelativeLayout>
 
@@ -90,6 +153,12 @@
 
         </android.support.wear.widget.BoxInsetLayout>
 
-
+    <cz.tmartinik.runtrack.ui.HeartRateView
+        android:id="@+id/hrCircle"
+        android:layout_gravity="center"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:fdColorSecondary="@color/background_grey"
+        />
 
 </FrameLayout>

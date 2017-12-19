@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <declare-styleable name="FitDoughnut">
+    <declare-styleable name="HeartRateView">
         <attr name="fdColorPrimary" format="color"/>
         <attr name="fdColorSecondary" format="color"/>
     </declare-styleable>

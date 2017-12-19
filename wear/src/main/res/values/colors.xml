@@ -3,5 +3,6 @@
     <color name="orange">#FF8C50</color>
     <color name="red">#FF2350</color>
     <color name="lightgrey">#C8C8C8</color>
-    <color name="yellow">#ffff19</color>
+    <color name="yellow">#EAC137</color>
+    <color name="background_grey">#403E3B</color>
 </resources>

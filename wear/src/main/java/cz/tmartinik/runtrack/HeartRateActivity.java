@@ -14,6 +14,7 @@ import cz.tmartinik.runtrack.logic.sensor.HrSensorEvent;
 import cz.tmartinik.runtrack.logic.sensor.HrSensorProvider;
 import cz.tmartinik.runtrack.logic.sensor.InternalHrSensorProvider;
 import cz.tmartinik.runtrack.logic.sensor.SensorListener;
+import cz.tmartinik.runtrack.ui.HeartRateView;
 import rx.functions.Action1;
 
 public class HeartRateActivity extends WearableActivity {
@@ -23,6 +24,9 @@ public class HeartRateActivity extends WearableActivity {
 
     @BindView(R.id.hr_hr)
     TextView hrView;
+
+    @BindView(R.id.hrCircle)
+    HeartRateView hrCircleView;
 
 
     @Override
@@ -50,8 +54,22 @@ public class HeartRateActivity extends WearableActivity {
                         mHrProvider.register(HeartRateActivity.this, new SensorListener<HrSensorEvent>() {
                             @Override
                             public void onSensorEvent(HrSensorEvent event) {
-                                Log.d("HR", ""+event.getHeartRate());
-                                hrView.setText(Integer.toString(event.getHeartRate()));
+                                int heartRate = event.getHeartRate();
+                                Log.d("HR", ""+ heartRate);
+                                hrView.setText(Integer.toString(heartRate));
+                                int hrRes = (int)(((float)(heartRate - 46) / (193f - 46f)) *100);
+                                hrCircleView.setHrRes(hrRes);
+                                if(hrRes < 60) {
+                                    hrCircleView.setColorPrimary(getColor(R.color.green));
+                                }else if(hrRes < 70){
+                                        hrCircleView.setColorPrimary(getColor(R.color.green));
+                                }else if(hrRes < 80){
+                                    hrCircleView.setColorPrimary(getColor(R.color.yellow));
+                                }else if(hrRes < 90){
+                                    hrCircleView.setColorPrimary(getColor(R.color.orange));
+                                }else {
+                                    hrCircleView.setColorPrimary(getColor(R.color.red));
+                                }
                             }
                         });
                     }
